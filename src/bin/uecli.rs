@@ -119,6 +119,11 @@ fn main() {
 
             binary::write_file(into.into(), words).expect("error writing binary");
         }
+        Opt::List { from } => {
+            let words = binary::read_file(from.into()).expect("error reading binary");
+            
+            pretty_print(&words);
+        }
         _ => unimplemented!(),
     }
 }

@@ -1,0 +1,12 @@
+[package]
+name = "ue14500-toolkit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitbit = "0.2"
+chonk = "0.5"
+
+[dependencies.clap]
+version = "3.0"
+features = ["derive"]

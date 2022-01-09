@@ -19,9 +19,7 @@ pub fn deserialize(input: &mut impl Read) -> Result<Words> {
     loop {
         match bitreader.read_bits(12) {
             Err(_) => break,
-            Ok(buf) => {
-                words.push(Word::from(buf))
-            },
+            Ok(buf) => words.push(Word::from(buf)),
         }
     }
 
@@ -30,7 +28,8 @@ pub fn deserialize(input: &mut impl Read) -> Result<Words> {
 
 /// serialize words to binary and write a file to disk
 pub fn write_file(path: PathBuf, words: Words) -> Result<()> {
-    let mut buffer = File::create(path).expect("error opening file for writing");
+    let mut buffer =
+        File::create(path).expect("error opening file for writing");
 
     serialize(&mut buffer, words)
 }
@@ -41,9 +40,9 @@ pub fn serialize(output: &mut impl Write, words: Words) -> Result<()> {
     let Words(words) = words;
 
     for word in words {
-        bitwriter.write_bits(word.inst().code(), 4).unwrap();
-        bitwriter.write_bits(word.addr().bits(), 6).unwrap();
-        bitwriter.write_bits(word.ctrl().bits(), 2).unwrap();
+        bitwriter.write_bits(word.inst().val(), 4).unwrap();
+        bitwriter.write_bits(word.addr().val(), 6).unwrap();
+        bitwriter.write_bits(word.ctrl().val(), 2).unwrap();
     }
 
     Ok(())

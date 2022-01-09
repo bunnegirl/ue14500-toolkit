@@ -54,113 +54,113 @@ impl From<Word> for u32 {
     fn from(word: Word) -> u32 {
         let Word(inst, addr, ctrl) = word;
 
-        inst.code() << INST_POS | addr.0 << ADDR_POS | ctrl.0
+        inst.val() << INST_POS | addr.val() << ADDR_POS | ctrl.val()
     }
 }
 
 pub const INST_MASK: u32 = 0b1111_000000_00;
 pub const INST_POS: u32 = 8;
-pub const INST_TABLE: [(u32, &str, Inst); 16] = [
+pub const INST_TABLE: [(u32, &str, InstKind); 16] = [
     (
         //
         0b0000,
         "nop0",
-        Inst::Nop0,
+        InstKind::Nop0,
     ),
     (
         //
         0b0001,
         "ld",
-        Inst::Ld,
+        InstKind::Ld,
     ),
     (
         //
         0b0010,
         "add",
-        Inst::Add,
+        InstKind::Add,
     ),
     (
         //
         0b0011,
         "sub",
-        Inst::Sub,
+        InstKind::Sub,
     ),
     (
         //
         0b0100,
         "one",
-        Inst::One,
+        InstKind::One,
     ),
     (
         //
         0b0101,
         "nand",
-        Inst::Nand,
+        InstKind::Nand,
     ),
     (
         //
         0b0110,
         "or",
-        Inst::Or,
+        InstKind::Or,
     ),
     (
         //
         0b0111,
         "xor",
-        Inst::Xor,
+        InstKind::Xor,
     ),
     (
         //
         0b1000,
         "sto",
-        Inst::Sto,
+        InstKind::Sto,
     ),
     (
         //
         0b1001,
         "stoc",
-        Inst::StoC,
+        InstKind::StoC,
     ),
     (
         //
         0b1010,
         "ien",
-        Inst::Ien,
+        InstKind::Ien,
     ),
     (
         //
         0b1011,
         "oen",
-        Inst::Oen,
+        InstKind::Oen,
     ),
     (
         //
         0b1100,
         "ioc",
-        Inst::Ioc,
+        InstKind::Ioc,
     ),
     (
         //
         0b1101,
         "rtn",
-        Inst::Rtn,
+        InstKind::Rtn,
     ),
     (
         //
         0b1110,
         "skz",
-        Inst::Skz,
+        InstKind::Skz,
     ),
     (
         //
         0b1111,
         "nopf",
-        Inst::NopF,
+        InstKind::NopF,
     ),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Inst {
+pub enum InstKind {
     Nop0,
     Ld,
     Add,
@@ -179,25 +179,48 @@ pub enum Inst {
     NopF,
 }
 
-impl Inst {
-    pub fn code(self) -> u32 {
+impl InstKind {
+    pub fn name(self) -> &'static str {
+        INST_TABLE[self as usize].1
+    }
+
+    pub fn val(self) -> u32 {
         INST_TABLE[self as usize].0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Inst(InstKind);
+
+impl Inst {
+    pub fn kind(self) -> InstKind {
+        self.0
     }
 
     pub fn name(self) -> &'static str {
-        INST_TABLE[self as usize].1
+        self.kind().name()
+    }
+
+    pub fn val(self) -> u32 {
+        self.kind().val()
     }
 }
 
 impl Binary for Inst {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
-        write!(fmt, "{:04b}", self.code())
+        write!(fmt, "{:04b}", self.val())
     }
 }
 
 impl Octal for Inst {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
-        write!(fmt, "{:02o}", self.code())
+        write!(fmt, "{:02o}", self.val())
+    }
+}
+
+impl From<InstKind> for Inst {
+    fn from(kind: InstKind) -> Inst {
+        Inst(kind)
     }
 }
 
@@ -209,11 +232,11 @@ impl From<u8> for Inst {
 
 impl From<u32> for Inst {
     fn from(word: u32) -> Inst {
-        let lookup = (word & INST_MASK) >> INST_POS;
+        let val = (word & INST_MASK) >> INST_POS;
 
-        for (code, _, inst) in INST_TABLE {
-            if code == lookup {
-                return inst;
+        for (tbl_val, _, tbl_kind) in INST_TABLE {
+            if tbl_val == val {
+                return Inst(tbl_kind);
             }
         }
 
@@ -223,53 +246,53 @@ impl From<u32> for Inst {
 
 pub const ADDR_MASK: u32 = 0b0000_111111_00;
 pub const ADDR_POS: u32 = 2;
-pub const ADDR_TABLE: [(RangeInclusive<u32>, &str, AddrRange); 7] = [
+pub const ADDR_TABLE: [(RangeInclusive<u32>, &str, AddrKind); 7] = [
     (
         //
         0b000_000..=0b100_111,
         "general",
-        AddrRange::General,
+        AddrKind::General,
     ),
     (
         //
         0b101_000..=0b101_111,
         "parallel read",
-        AddrRange::ParallelRead,
+        AddrKind::ParallelRead,
     ),
     (
         //
         0b110_000..=0b110_111,
         "external input",
-        AddrRange::ExternalInput,
+        AddrKind::ExternalInput,
     ),
     (
         //
         0b111_000..=0b111_000,
         "qrr",
-        AddrRange::QRR,
+        AddrKind::QRR,
     ),
     (
         //
         0b111_001..=0b111_001,
         "rr",
-        AddrRange::RR,
+        AddrKind::RR,
     ),
     (
         //
         0b111_010..=0b111_011,
         "high input",
-        AddrRange::HighInput,
+        AddrKind::HighInput,
     ),
     (
         //
         0b111_100..=0b111_111,
         "low input / high z",
-        AddrRange::LowInput,
+        AddrKind::LowInput,
     ),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AddrRange {
+pub enum AddrKind {
     General,
     ParallelRead,
     ExternalInput,
@@ -279,7 +302,13 @@ pub enum AddrRange {
     LowInput,
 }
 
-impl Display for AddrRange {
+impl AddrKind {
+    fn name(self) -> &'static str {
+        ADDR_TABLE[self as usize].1
+    }
+}
+
+impl Display for AddrKind {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
         let addr_name =
             ADDR_TABLE.iter().find_map(|(_, addr_name, addr_range)| {
@@ -303,27 +332,37 @@ impl Display for AddrRange {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Addr(pub u32, pub AddrRange);
+pub struct Addr(AddrKind, u32);
 
 impl Addr {
-    pub fn bits(&self) -> u32 {
+    pub fn kind(&self) -> AddrKind {
         self.0
     }
 
-    pub fn range(&self) -> AddrRange {
+    pub fn name(&self) -> &'static str {
+        self.kind().name()
+    }
+
+    pub fn val(&self) -> u32 {
         self.1
     }
 }
 
 impl Binary for Addr {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
-        write!(fmt, "{:06b}", self.0)
+        write!(fmt, "{:06b}", self.val())
     }
 }
 
 impl Octal for Addr {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
-        write!(fmt, "{:02o}", self.0)
+        write!(fmt, "{:02o}", self.val())
+    }
+}
+
+impl From<i32> for Addr {
+    fn from(word: i32) -> Addr {
+        Addr::from(word as u32)
     }
 }
 
@@ -335,10 +374,10 @@ impl From<u8> for Addr {
 
 impl From<u32> for Addr {
     fn from(word: u32) -> Addr {
-        let addr = (word & ADDR_MASK) >> ADDR_POS;
+        let addr_bits = (word & ADDR_MASK) >> ADDR_POS;
         let addr_type =
             ADDR_TABLE.iter().find_map(|(addr_range, _, addr_type)| {
-                if addr_range.contains(&addr) {
+                if addr_range.contains(&addr_bits) {
                     return Some(addr_type);
                 }
 
@@ -346,36 +385,80 @@ impl From<u32> for Addr {
             });
 
         Addr(
-            addr,
             if let Some(addr_type) = addr_type {
                 *addr_type
             } else {
-                AddrRange::General
+                AddrKind::General
             },
+            addr_bits,
         )
     }
 }
 
 const CTRL_MASK: u32 = 0b0000_000000_11;
+const CTRL_TABLE: [(u32, &str, CtrlKind); 4] = [
+    (0b00, "null", CtrlKind::Null),
+    (0b01, "copy and shift out", CtrlKind::CopyShift),
+    (0b10, "undefined", CtrlKind::Undefined),
+    (0b11, "stop tape", CtrlKind::StopTape),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Ctrl(pub u32);
+pub enum CtrlKind {
+    Null,
+    CopyShift,
+    Undefined,
+    StopTape,
+}
+
+impl CtrlKind {
+    pub fn name(self) -> &'static str {
+        CTRL_TABLE[self as usize].1
+    }
+
+    pub fn val(self) -> u32 {
+        CTRL_TABLE[self as usize].0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Ctrl(CtrlKind);
 
 impl Ctrl {
-    pub fn bits(&self) -> u32 {
+    pub fn kind(&self) -> CtrlKind {
         self.0
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.kind().name()
+    }
+
+    pub fn val(&self) -> u32 {
+        self.kind().val()
     }
 }
 
 impl Binary for Ctrl {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
-        write!(fmt, "{:02b}", self.0)
+        write!(fmt, "{:02b}", self.val())
     }
 }
 
 impl Octal for Ctrl {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
-        write!(fmt, "{:01o}", self.0)
+        write!(fmt, "{:01o}", self.val())
+    }
+}
+
+impl From<CtrlKind> for Ctrl {
+    fn from(kind: CtrlKind) -> Ctrl {
+        Ctrl(kind)
+    }
+}
+
+impl From<i32> for Ctrl {
+    fn from(word: i32) -> Ctrl {
+        Ctrl::from(word as u32)
     }
 }
 
@@ -387,6 +470,14 @@ impl From<u8> for Ctrl {
 
 impl From<u32> for Ctrl {
     fn from(word: u32) -> Ctrl {
-        Ctrl(word & CTRL_MASK)
+        let val = word & CTRL_MASK;
+
+        for (tbl_val, _, tbl_kind) in CTRL_TABLE {
+            if tbl_val == val {
+                return Ctrl(tbl_kind);
+            }
+        }
+
+        unreachable!()
     }
 }

@@ -12,9 +12,9 @@ use ue14500_toolkit::{
 const ASM_EXTENSION: &str = "asm";
 const BIN_EXTENSION: &str = "bin";
 
+/// Cli tools for the Usagi Electric ue14500 processor
 #[derive(Parser, Debug, PartialEq)]
 #[clap(about, author, version)]
-/// Cli tools for the Usagi Electric ue14500 processor
 struct Opt {
     /// Number format
     #[clap(long, short = 'n')]
@@ -165,34 +165,34 @@ fn list(numbers: NumberFormat, from: PathBuf) {
     use prettytable::{
         cell,
         format::{FormatBuilder, LinePosition, LineSeparator},
-        row, table, Attr, Row, Table,
+        Attr, Row, Table,
     };
     use NumberFormat::*;
 
     let Words(words) = binary::read_file(from).expect("error reading binary");
 
     let mut table = Table::new();
-    let table_format = FormatBuilder::new()
-        .column_separator('│')
-        .borders('│')
-        .separators(
-            &[LinePosition::Title],
-            LineSeparator::new('─', '┼', '├', '┤'),
-        )
-        .separators(
-            &[LinePosition::Top],
-            LineSeparator::new('─', '┬', '╭', '╮'),
-        )
-        .separators(
-            &[LinePosition::Bottom],
-            LineSeparator::new('─', '┴', '╰', '╯'),
-        )
-        .padding(1, 1)
-        .indent(1)
-        .build();
-    let inner_table_format = FormatBuilder::new().build();
 
-    table.set_format(table_format);
+    table.set_format(
+        FormatBuilder::new()
+            .column_separator('│')
+            .borders('│')
+            .separators(
+                &[LinePosition::Title],
+                LineSeparator::new('─', '┼', '├', '┤'),
+            )
+            .separators(
+                &[LinePosition::Top],
+                LineSeparator::new('─', '┬', '╭', '╮'),
+            )
+            .separators(
+                &[LinePosition::Bottom],
+                LineSeparator::new('─', '┴', '╰', '╯'),
+            )
+            .padding(1, 1)
+            .indent(1)
+            .build(),
+    );
 
     table.set_titles(Row::new(vec![
         cell![r->"#"].with_style(Attr::Dim),
@@ -210,13 +210,14 @@ fn list(numbers: NumberFormat, from: PathBuf) {
 
         let addr = word.addr();
         let addr = match numbers {
-            Bin => format!("0b{:b}{:>20}", addr, addr.range().to_string()),
-            Oct => format!("0o{:o}{:>20}", addr, addr.range().to_string()),
+            Bin => format!("0b{:b}{:>20}", addr, addr.name()),
+            Oct => format!("0o{:o}{:>20}", addr, addr.name()),
         };
 
+        let ctrl = word.ctrl();
         let ctrl = match numbers {
-            Bin => format!("0b{:b}", word.ctrl()),
-            Oct => format!("0o{:o}", word.ctrl()),
+            Bin => format!("0b{:b}{:>20}", ctrl, ctrl.name()),
+            Oct => format!("0o{:o}{:>20}", ctrl, ctrl.name()),
         };
 
         table.add_row(Row::new(vec![

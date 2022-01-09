@@ -6,11 +6,8 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use ue14500_toolkit::{
     data::Words,
-    formats::{assembly, binary},
+    formats::{assembly, binary, FileType},
 };
-
-const ASM_EXTENSION: &str = "asm";
-const BIN_EXTENSION: &str = "bin";
 
 /// Cli tools for the Usagi Electric ue14500 processor
 #[derive(Parser, Debug, PartialEq)]
@@ -169,7 +166,16 @@ fn list(numbers: NumberFormat, from: PathBuf) {
     };
     use NumberFormat::*;
 
-    let Words(words) = binary::read_file(from).expect("error reading binary");
+    let Words(words) = match FileType::try_from(from.clone())
+        .expect("assembly or binary file")
+    {
+        FileType::Assembly => {
+            assembly::read_file(from).expect("error reading assembly")
+        }
+        FileType::Binary => {
+            binary::read_file(from).expect("error reading binary")
+        }
+    };
 
     let mut table = Table::new();
 

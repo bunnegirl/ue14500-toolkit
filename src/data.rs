@@ -1,4 +1,5 @@
-use std::fmt::{Binary, Octal, Formatter, Result as FmtResult};
+use std::fmt::{Binary, Display, Formatter, Octal, Result as FmtResult};
+use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Words(pub Vec<Word>);
@@ -60,22 +61,102 @@ impl From<Word> for u32 {
 pub const INST_MASK: u32 = 0b1111_000000_00;
 pub const INST_POS: u32 = 8;
 pub const INST_TABLE: [(u32, &str, Inst); 16] = [
-    (0b0000, "nop0", Inst::Nop0),
-    (0b0001, "ld", Inst::Ld),
-    (0b0010, "add", Inst::Add),
-    (0b0011, "sub", Inst::Sub),
-    (0b0100, "one", Inst::One),
-    (0b0101, "nand", Inst::Nand),
-    (0b0110, "or", Inst::Or),
-    (0b0111, "xor", Inst::Xor),
-    (0b1000, "sto", Inst::Sto),
-    (0b1001, "stoc", Inst::StoC),
-    (0b1010, "ien", Inst::Ien),
-    (0b1011, "oen", Inst::Oen),
-    (0b1100, "ioc", Inst::Ioc),
-    (0b1101, "rtn", Inst::Rtn),
-    (0b1110, "skz", Inst::Skz),
-    (0b1111, "nopf", Inst::NopF),
+    (
+        //
+        0b0000,
+        "nop0",
+        Inst::Nop0,
+    ),
+    (
+        //
+        0b0001,
+        "ld",
+        Inst::Ld,
+    ),
+    (
+        //
+        0b0010,
+        "add",
+        Inst::Add,
+    ),
+    (
+        //
+        0b0011,
+        "sub",
+        Inst::Sub,
+    ),
+    (
+        //
+        0b0100,
+        "one",
+        Inst::One,
+    ),
+    (
+        //
+        0b0101,
+        "nand",
+        Inst::Nand,
+    ),
+    (
+        //
+        0b0110,
+        "or",
+        Inst::Or,
+    ),
+    (
+        //
+        0b0111,
+        "xor",
+        Inst::Xor,
+    ),
+    (
+        //
+        0b1000,
+        "sto",
+        Inst::Sto,
+    ),
+    (
+        //
+        0b1001,
+        "stoc",
+        Inst::StoC,
+    ),
+    (
+        //
+        0b1010,
+        "ien",
+        Inst::Ien,
+    ),
+    (
+        //
+        0b1011,
+        "oen",
+        Inst::Oen,
+    ),
+    (
+        //
+        0b1100,
+        "ioc",
+        Inst::Ioc,
+    ),
+    (
+        //
+        0b1101,
+        "rtn",
+        Inst::Rtn,
+    ),
+    (
+        //
+        0b1110,
+        "skz",
+        Inst::Skz,
+    ),
+    (
+        //
+        0b1111,
+        "nopf",
+        Inst::NopF,
+    ),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -142,13 +223,95 @@ impl From<u32> for Inst {
 
 pub const ADDR_MASK: u32 = 0b0000_111111_00;
 pub const ADDR_POS: u32 = 2;
+pub const ADDR_TABLE: [(RangeInclusive<u32>, &str, AddrRange); 7] = [
+    (
+        //
+        0b000_000..=0b100_111,
+        "general",
+        AddrRange::General,
+    ),
+    (
+        //
+        0b101_000..=0b101_111,
+        "parallel read",
+        AddrRange::ParallelRead,
+    ),
+    (
+        //
+        0b110_000..=0b110_111,
+        "external input",
+        AddrRange::ExternalInput,
+    ),
+    (
+        //
+        0b111_000..=0b111_000,
+        "qrr",
+        AddrRange::QRR,
+    ),
+    (
+        //
+        0b111_001..=0b111_001,
+        "rr",
+        AddrRange::RR,
+    ),
+    (
+        //
+        0b111_010..=0b111_011,
+        "high input",
+        AddrRange::HighInput,
+    ),
+    (
+        //
+        0b111_100..=0b111_111,
+        "low input / high z",
+        AddrRange::LowInput,
+    ),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Addr(pub u32);
+pub enum AddrRange {
+    General,
+    ParallelRead,
+    ExternalInput,
+    QRR,
+    RR,
+    HighInput,
+    LowInput,
+}
+
+impl Display for AddrRange {
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        let addr_name =
+            ADDR_TABLE.iter().find_map(|(_, addr_name, addr_range)| {
+                if addr_range == self {
+                    return Some(addr_name);
+                }
+
+                None
+            });
+
+        write!(
+            fmt,
+            "{}",
+            if let Some(addr_name) = addr_name {
+                addr_name
+            } else {
+                ADDR_TABLE[0].1
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Addr(pub u32, pub AddrRange);
 
 impl Addr {
     pub fn bits(&self) -> u32 {
         self.0
+    }
+
+    pub fn range(&self) -> AddrRange {
+        self.1
     }
 }
 
@@ -172,7 +335,24 @@ impl From<u8> for Addr {
 
 impl From<u32> for Addr {
     fn from(word: u32) -> Addr {
-        Addr((word & ADDR_MASK) >> ADDR_POS)
+        let addr = (word & ADDR_MASK) >> ADDR_POS;
+        let addr_type =
+            ADDR_TABLE.iter().find_map(|(addr_range, _, addr_type)| {
+                if addr_range.contains(&addr) {
+                    return Some(addr_type);
+                }
+
+                None
+            });
+
+        Addr(
+            addr,
+            if let Some(addr_type) = addr_type {
+                *addr_type
+            } else {
+                AddrRange::General
+            },
+        )
     }
 }
 

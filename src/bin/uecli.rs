@@ -1,8 +1,7 @@
 #![allow(clippy::unusual_byte_groupings)]
 #![allow(dead_code)]
 
-use clap::{ArgEnum, Subcommand, Parser};
-use core::num;
+use clap::{ArgEnum, Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use ue14500_toolkit::{
@@ -144,22 +143,21 @@ fn main() {
     match command {
         Cmd::Asm { from, into } => asm(numbers, from.into(), into.into()),
         Cmd::Dsm { from, into } => asm(numbers, from.into(), into.into()),
-        Cmd::List { from } => list(numbers, from.into())
+        Cmd::List { from } => list(numbers, from.into()),
     }
 }
 
 fn asm(numbers: NumberFormat, from: PathBuf, into: PathBuf) {
     binary::write_file(
         into.clone(),
-        assembly::read_file(from)
-            .expect("error reading assembly"),
+        assembly::read_file(from).expect("error reading assembly"),
     )
     .expect("error writing binary");
 
     list(numbers, into);
 }
 
-fn dsm(numbers: NumberFormat, from: PathBuf, into: PathBuf) {
+fn dsm(_numbers: NumberFormat, _from: PathBuf, _into: PathBuf) {
     println!("disassembly not yet implemented")
 }
 
@@ -167,50 +165,66 @@ fn list(numbers: NumberFormat, from: PathBuf) {
     use prettytable::{
         cell,
         format::{FormatBuilder, LinePosition, LineSeparator},
-        row, Table,
+        row, table, Attr, Row, Table,
     };
     use NumberFormat::*;
 
-    let Words(words) = binary::read_file(from)
-        .expect("error reading binary");
+    let Words(words) = binary::read_file(from).expect("error reading binary");
 
     let mut table = Table::new();
+    let table_format = FormatBuilder::new()
+        .column_separator('│')
+        .borders('│')
+        .separators(
+            &[LinePosition::Title],
+            LineSeparator::new('─', '┼', '├', '┤'),
+        )
+        .separators(
+            &[LinePosition::Top],
+            LineSeparator::new('─', '┬', '╭', '╮'),
+        )
+        .separators(
+            &[LinePosition::Bottom],
+            LineSeparator::new('─', '┴', '╰', '╯'),
+        )
+        .padding(1, 1)
+        .indent(1)
+        .build();
+    let inner_table_format = FormatBuilder::new().build();
 
-    table.set_format(
-        FormatBuilder::new()
-            .column_separator('│')
-            .borders('┃')
-            .separators(
-                &[LinePosition::Title],
-                LineSeparator::new('─', '┼', '┠', '┨'),
-            )
-            .separators(&[LinePosition::Top], LineSeparator::new('─', '┬', '┎', '┒'))
-            .separators(
-                &[LinePosition::Bottom],
-                LineSeparator::new('─', '┴', '┖', '┚'),
-            )
-            .padding(1, 1)
-            .indent(2)
-            .build(),
-    );
+    table.set_format(table_format);
 
-    table.set_titles(row!["#", "Instruction", "Address", "I/O Control"]);
+    table.set_titles(Row::new(vec![
+        cell![r->"#"].with_style(Attr::Dim),
+        cell!["Instruction"].with_style(Attr::Dim),
+        cell!["Address"].with_style(Attr::Dim),
+        cell!["I/O Control"].with_style(Attr::Dim),
+    ]));
 
     for (index, word) in words.iter().enumerate() {
+        let inst = word.inst();
         let inst = match numbers {
-            Bin => format!("0b{:b}", word.inst()),
-            Oct => format!("0o{:o}", word.inst()),
+            Bin => format!("0b{:b}{:>6}", inst, inst.name()),
+            Oct => format!("0o{:o}{:>7}", inst, inst.name()),
         };
+
+        let addr = word.addr();
         let addr = match numbers {
-            Bin => format!("0b{:b}", word.addr()),
-            Oct => format!("0o{:o}", word.addr()),
+            Bin => format!("0b{:b}{:>20}", addr, addr.range().to_string()),
+            Oct => format!("0o{:o}{:>20}", addr, addr.range().to_string()),
         };
+
         let ctrl = match numbers {
             Bin => format!("0b{:b}", word.ctrl()),
             Oct => format!("0o{:o}", word.ctrl()),
         };
 
-        table.add_row(row![index, inst, addr, ctrl]);
+        table.add_row(Row::new(vec![
+            cell![r->index].with_style(Attr::Dim),
+            cell![inst],
+            cell![addr],
+            cell![ctrl],
+        ]));
     }
 
     table.printstd();

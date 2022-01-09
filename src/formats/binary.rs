@@ -1,7 +1,7 @@
 use crate::data::{Words, *};
 use bitbit::{BitReader, BitWriter};
 use std::fs::File;
-use std::io::{prelude::*, Result};
+use std::io::{prelude::*, BufReader, BufWriter, Result};
 use std::path::PathBuf;
 
 /// read a file from disk and deserialise words from binary
@@ -13,13 +13,14 @@ pub fn read_file(path: PathBuf) -> Result<Words> {
 
 /// deserialize words from binary with any reader
 pub fn deserialize(input: &mut impl Read) -> Result<Words> {
-    let mut bitreader: BitReader<_, bitbit::MSB> = BitReader::new(input);
+    let buf = BufReader::new(input);
+    let mut bitreader: BitReader<_, bitbit::MSB> = BitReader::new(buf);
     let mut words = Vec::new();
 
     loop {
         match bitreader.read_bits(12) {
             Err(_) => break,
-            Ok(buf) => words.push(Word::from(buf)),
+            Ok(bits) => words.push(Word::from(bits)),
         }
     }
 
@@ -36,14 +37,18 @@ pub fn write_file(path: PathBuf, words: Words) -> Result<()> {
 
 /// serialize words to binary with any writer
 pub fn serialize(output: &mut impl Write, words: Words) -> Result<()> {
-    let mut bitwriter = BitWriter::new(output);
+    let mut buf = BufWriter::new(output);
+    let mut bitwriter = BitWriter::new(&mut buf);
     let Words(words) = words;
 
     for word in words {
-        bitwriter.write_bits(word.inst().val(), 4).unwrap();
-        bitwriter.write_bits(word.addr().val(), 6).unwrap();
-        bitwriter.write_bits(word.ctrl().val(), 2).unwrap();
+        bitwriter.write_bits(word.inst().val(), 4)?;
+        bitwriter.write_bits(word.addr().val(), 6)?;
+        bitwriter.write_bits(word.ctrl().val(), 2)?;
     }
+
+    bitwriter.pad_to_byte()?;
+    buf.flush()?;
 
     Ok(())
 }

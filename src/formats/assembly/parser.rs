@@ -23,48 +23,49 @@ pub fn words<'a>() -> impl Parser<'a, Words, SyntaxError> {
 #[test]
 fn parse_words() {
     let asm = r"
-ONE 0o77 00
-STOC 0o50 00
-STOC 0o51 00
-STO 0o52 00
-STOC 0o53 00
-STO 0o54 00
-NOP0 0o77 01";
+    ONE 0o77 00
+    STOC 0o50 00
+    STOC 0o51 00
+    STO 0o52 00
+    STOC 0o53 00
+    STO 0o54 00
+    NOP0 0o77 01
+    ";
 
     let expected = Words(vec![
         Word(
             Inst::from(InstKind::One),
-            Addr::from(63),
+            Addr::from(63 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
         Word(
             Inst::from(InstKind::StoC),
-            Addr::from(40),
+            Addr::from(40 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
         Word(
             Inst::from(InstKind::StoC),
-            Addr::from(41),
+            Addr::from(41 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
         Word(
             Inst::from(InstKind::Sto),
-            Addr::from(42),
+            Addr::from(42 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
         Word(
             Inst::from(InstKind::StoC),
-            Addr::from(43),
+            Addr::from(43 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
         Word(
             Inst::from(InstKind::Sto),
-            Addr::from(44),
+            Addr::from(44 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
         Word(
             Inst::from(InstKind::Nop0),
-            Addr::from(63),
+            Addr::from(63 << ADDR_POS),
             Ctrl::from(CtrlKind::CopyShift),
         ),
     ]);
@@ -96,7 +97,7 @@ fn parse_word() {
     assert_eq!(
         Word(
             Inst::from(InstKind::One),
-            Addr::from(63),
+            Addr::from(63 << ADDR_POS),
             Ctrl::from(CtrlKind::Null)
         ),
         word().parse("ONE 0o77 00").unwrap_result()
@@ -172,8 +173,14 @@ fn addr<'a>() -> impl Parser<'a, Addr, SyntaxError> {
 
 #[test]
 fn parse_addr() {
-    assert_eq!(Addr::from(63), addr().parse("0o77123").unwrap_result());
-    assert_eq!(Addr::from(0), addr().parse("0o0").unwrap_result());
+    assert_eq!(
+        Addr::from(63 << ADDR_POS),
+        addr().parse("0o77123").unwrap_result()
+    );
+    assert_eq!(
+        Addr::from(0 << ADDR_POS),
+        addr().parse("0o0").unwrap_result()
+    );
     assert!(addr().parse("0o88").is_err());
     assert!(addr().parse("123").is_err());
     assert!(addr().parse("").is_err());

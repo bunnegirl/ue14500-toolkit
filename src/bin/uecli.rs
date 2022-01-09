@@ -25,6 +25,9 @@ struct Opt {
 enum Cmd {
     /// Assemble binary
     Asm {
+        /// List file contents
+        #[clap(long, short = 'l')]
+        list: bool,
         /// Assembly input
         #[clap(parse(try_from_str))]
         from: InputPath,
@@ -35,6 +38,9 @@ enum Cmd {
 
     /// Disassemble binary
     Dsm {
+        /// List file contents
+        #[clap(long, short = 'l')]
+        list: bool,
         /// Binary input
         #[clap(parse(try_from_str))]
         from: InputPath,
@@ -43,7 +49,7 @@ enum Cmd {
         into: OutputPath,
     },
 
-    /// List binary contents
+    /// List file contents
     List {
         /// Binary input
         #[clap(parse(try_from_str))]
@@ -66,12 +72,6 @@ impl Default for NumberFormat {
 #[derive(Debug, PartialEq)]
 pub struct InputPath(pub PathBuf);
 
-impl From<InputPath> for PathBuf {
-    fn from(path: InputPath) -> PathBuf {
-        path.0
-    }
-}
-
 impl FromStr for InputPath {
     type Err = String;
 
@@ -88,12 +88,6 @@ impl FromStr for InputPath {
 
 #[derive(Debug, PartialEq)]
 pub struct OutputPath(pub PathBuf);
-
-impl From<OutputPath> for PathBuf {
-    fn from(path: OutputPath) -> PathBuf {
-        path.0
-    }
-}
 
 impl FromStr for OutputPath {
     type Err = String;
@@ -138,27 +132,47 @@ fn main() {
     let Opt { numbers, command } = Opt::parse();
 
     match command {
-        Cmd::Asm { from, into } => asm(numbers, from.into(), into.into()),
-        Cmd::Dsm { from, into } => asm(numbers, from.into(), into.into()),
-        Cmd::List { from } => list(numbers, from.into()),
+        Cmd::Asm {
+            list,
+            from: InputPath(from),
+            into: OutputPath(into),
+        } => {
+            run_asm(from, into.clone());
+
+            if list {
+                run_list(numbers, into)
+            }
+        }
+        Cmd::Dsm {
+            list,
+            from: InputPath(from),
+            into: OutputPath(into),
+        } => {
+            run_dsm(from, into.clone());
+
+            if list {
+                run_list(numbers, into)
+            }
+        }
+        Cmd::List {
+            from: InputPath(from),
+        } => run_list(numbers, from),
     }
 }
 
-fn asm(numbers: NumberFormat, from: PathBuf, into: PathBuf) {
+fn run_asm(from: PathBuf, into: PathBuf) {
     binary::write_file(
-        into.clone(),
+        into,
         assembly::read_file(from).expect("error reading assembly"),
     )
     .expect("error writing binary");
-
-    list(numbers, into);
 }
 
-fn dsm(_numbers: NumberFormat, _from: PathBuf, _into: PathBuf) {
+fn run_dsm(_from: PathBuf, _into: PathBuf) {
     println!("disassembly not yet implemented")
 }
 
-fn list(numbers: NumberFormat, from: PathBuf) {
+fn run_list(numbers: NumberFormat, from: PathBuf) {
     use prettytable::{
         cell,
         format::{FormatBuilder, LinePosition, LineSeparator},

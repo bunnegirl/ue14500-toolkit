@@ -1,4 +1,4 @@
-use std::fmt::{Binary, Formatter, Result as FmtResult};
+use std::fmt::{Binary, Octal, Formatter, Result as FmtResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Words(pub Vec<Word>);
@@ -114,6 +114,12 @@ impl Binary for Inst {
     }
 }
 
+impl Octal for Inst {
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        write!(fmt, "{:02o}", self.code())
+    }
+}
+
 impl From<u8> for Inst {
     fn from(word: u8) -> Inst {
         Inst::from(word as u32)
@@ -152,6 +158,12 @@ impl Binary for Addr {
     }
 }
 
+impl Octal for Addr {
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        write!(fmt, "{:02o}", self.0)
+    }
+}
+
 impl From<u8> for Addr {
     fn from(word: u8) -> Addr {
         Addr::from(word as u32)
@@ -178,6 +190,12 @@ impl Ctrl {
 impl Binary for Ctrl {
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
         write!(fmt, "{:02b}", self.0)
+    }
+}
+
+impl Octal for Ctrl {
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        write!(fmt, "{:01o}", self.0)
     }
 }
 

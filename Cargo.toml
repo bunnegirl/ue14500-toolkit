@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 bitbit = "0.2"
 chonk = "0.5"
+prettytable-rs = "0.8"
 
 [dependencies.clap]
 version = "3.0"

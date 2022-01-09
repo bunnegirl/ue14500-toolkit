@@ -1,11 +1,12 @@
 #![allow(clippy::unusual_byte_groupings)]
 #![allow(dead_code)]
 
-use clap::Parser;
+use clap::{ArgEnum, Subcommand, Parser};
+use core::num;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use ue14500_toolkit::{
-    data::{Word, Words},
+    data::Words,
     formats::{assembly, binary},
 };
 
@@ -14,28 +15,55 @@ const BIN_EXTENSION: &str = "bin";
 
 #[derive(Parser, Debug, PartialEq)]
 #[clap(about, author, version)]
-/// cli tools for the usagi electric ue14500 processor
-enum Opt {
-    /// assemble binary
+/// Cli tools for the Usagi Electric ue14500 processor
+struct Opt {
+    /// Number format
+    #[clap(long, short = 'n')]
+    #[clap(arg_enum, default_value = "bin")]
+    numbers: NumberFormat,
+    #[clap(subcommand)]
+    command: Cmd,
+}
+
+#[derive(Subcommand, Debug, PartialEq)]
+enum Cmd {
+    /// Assemble binary
     Asm {
+        /// Assembly input
         #[clap(parse(try_from_str))]
         from: InputPath,
+        /// Binary output
         #[clap(parse(try_from_str))]
         into: OutputPath,
     },
 
-    /// disassemble binary
+    /// Disassemble binary
     Dsm {
+        /// Binary input
         #[clap(parse(try_from_str))]
         from: InputPath,
+        /// Assembly output
         #[clap(parse(try_from_str))]
         into: OutputPath,
     },
 
-    /// list binary contents
+    /// List binary contents
     List {
+        /// Binary input
         #[clap(parse(try_from_str))]
         from: InputPath,
+    },
+}
+
+#[derive(ArgEnum, Clone, Debug, PartialEq)]
+pub enum NumberFormat {
+    Bin,
+    Oct,
+}
+
+impl Default for NumberFormat {
+    fn default() -> Self {
+        NumberFormat::Bin
     }
 }
 
@@ -111,33 +139,79 @@ fn validate_file_writable(path: &Path) -> Result<(), String> {
 }
 
 fn main() {
-    match Opt::parse() {
-        Opt::Asm { from, into } => {
-            let words = assembly::read_file(from.into()).expect("error reading assembly");
+    let Opt { numbers, command } = Opt::parse();
 
-            pretty_print(&words);
-
-            binary::write_file(into.into(), words).expect("error writing binary");
-        }
-        Opt::Dsm { .. } => {
-            println!("disassembly not yet implemented");
-        }
-        Opt::List { from } => {
-            let words = binary::read_file(from.into()).expect("error reading binary");
-            
-            pretty_print(&words);
-        }
+    match command {
+        Cmd::Asm { from, into } => asm(numbers, from.into(), into.into()),
+        Cmd::Dsm { from, into } => asm(numbers, from.into(), into.into()),
+        Cmd::List { from } => list(numbers, from.into())
     }
 }
 
-fn pretty_print(words: &Words) {
-    let Words(words) = words;
+fn asm(numbers: NumberFormat, from: PathBuf, into: PathBuf) {
+    binary::write_file(
+        into.clone(),
+        assembly::read_file(from)
+            .expect("error reading assembly"),
+    )
+    .expect("error writing binary");
 
-    println!("  inst  addr    ctrl");
+    list(numbers, into);
+}
 
-    for word in words {
-        let Word(inst, addr, ctrl) = word;
+fn dsm(numbers: NumberFormat, from: PathBuf, into: PathBuf) {
+    println!("disassembly not yet implemented")
+}
 
-        println!("  {:b}  {:b}  {:b}", inst, addr, ctrl);
+fn list(numbers: NumberFormat, from: PathBuf) {
+    use prettytable::{
+        cell,
+        format::{FormatBuilder, LinePosition, LineSeparator},
+        row, Table,
+    };
+    use NumberFormat::*;
+
+    let Words(words) = binary::read_file(from)
+        .expect("error reading binary");
+
+    let mut table = Table::new();
+
+    table.set_format(
+        FormatBuilder::new()
+            .column_separator('│')
+            .borders('┃')
+            .separators(
+                &[LinePosition::Title],
+                LineSeparator::new('─', '┼', '┠', '┨'),
+            )
+            .separators(&[LinePosition::Top], LineSeparator::new('─', '┬', '┎', '┒'))
+            .separators(
+                &[LinePosition::Bottom],
+                LineSeparator::new('─', '┴', '┖', '┚'),
+            )
+            .padding(1, 1)
+            .indent(2)
+            .build(),
+    );
+
+    table.set_titles(row!["#", "Instruction", "Address", "I/O Control"]);
+
+    for (index, word) in words.iter().enumerate() {
+        let inst = match numbers {
+            Bin => format!("0b{:b}", word.inst()),
+            Oct => format!("0o{:o}", word.inst()),
+        };
+        let addr = match numbers {
+            Bin => format!("0b{:b}", word.addr()),
+            Oct => format!("0o{:o}", word.addr()),
+        };
+        let ctrl = match numbers {
+            Bin => format!("0b{:b}", word.ctrl()),
+            Oct => format!("0o{:o}", word.ctrl()),
+        };
+
+        table.add_row(row![index, inst, addr, ctrl]);
     }
+
+    table.printstd();
 }

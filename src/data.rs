@@ -2,7 +2,21 @@ use std::fmt::{Binary, Display, Formatter, Octal, Result as FmtResult};
 use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Words(pub Vec<Word>);
+pub struct Nodes(pub Vec<Node>);
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Node {
+    Comment(String),
+    Word(Inst, Addr, Ctrl),
+}
+
+impl From<Word> for Node {
+    fn from(node: Word) -> Node {
+        let Word(inst, addr, ctrl) = node;
+
+        Node::Word(inst, addr, ctrl)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Word(pub Inst, pub Addr, pub Ctrl);
@@ -37,6 +51,30 @@ impl Word {
     /// create a new word with the provided ctrl
     pub fn with_ctrl(self, ctrl: Ctrl) -> Word {
         Word(self.0, self.1, ctrl)
+    }
+}
+
+impl TryFrom<Node> for Word {
+    type Error = ();
+
+    fn try_from(node: Node) -> Result<Word, ()> {
+        if let Node::Word(inst, addr, ctrl) = node {
+            return Ok(Word(inst, addr, ctrl));
+        }
+
+        Err(())
+    }
+}
+
+impl TryFrom<&Node> for Word {
+    type Error = ();
+
+    fn try_from(node: &Node) -> Result<Word, ()> {
+        if let Node::Word(inst, addr, ctrl) = node {
+            return Ok(Word(*inst, *addr, *ctrl));
+        }
+
+        Err(())
     }
 }
 

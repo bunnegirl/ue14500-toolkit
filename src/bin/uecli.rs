@@ -2,16 +2,21 @@
 #![allow(dead_code)]
 
 use clap::{ArgEnum, Parser, Subcommand};
+use prettytable::format::{
+    FormatBuilder, LinePosition, LineSeparator, TableFormat,
+};
+use prettytable::Table;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use ue14500_toolkit::{
-    data::Words,
+    data::{Node, Nodes},
     formats::{assembly, binary, FileType},
 };
 
-/// Cli tools for the Usagi Electric ue14500 processor
+/// Command line tools for the Usagi Electric ue14500 processor
 #[derive(Parser, Debug, PartialEq)]
-#[clap(about, author, version)]
+#[clap(name = "uecli")]
+#[clap(version = "0.1")]
 struct Opt {
     /// Number format
     #[clap(long, short = 'n')]
@@ -173,14 +178,10 @@ fn run_dsm(_from: PathBuf, _into: PathBuf) {
 }
 
 fn run_list(numbers: NumberFormat, from: PathBuf) {
-    use prettytable::{
-        cell,
-        format::{FormatBuilder, LinePosition, LineSeparator},
-        Attr, Row, Table,
-    };
+    use prettytable::{cell, Attr, Row};
     use NumberFormat::*;
 
-    let Words(words) = match FileType::try_from(from.clone())
+    let Nodes(nodes) = match FileType::try_from(from.clone())
         .expect("assembly or binary file")
     {
         FileType::Assembly => {
@@ -191,28 +192,7 @@ fn run_list(numbers: NumberFormat, from: PathBuf) {
         }
     };
 
-    let mut table = Table::new();
-
-    table.set_format(
-        FormatBuilder::new()
-            .column_separator('│')
-            .borders('│')
-            .separators(
-                &[LinePosition::Title],
-                LineSeparator::new('─', '┼', '├', '┤'),
-            )
-            .separators(
-                &[LinePosition::Top],
-                LineSeparator::new('─', '┬', '╭', '╮'),
-            )
-            .separators(
-                &[LinePosition::Bottom],
-                LineSeparator::new('─', '┴', '╰', '╯'),
-            )
-            .padding(1, 1)
-            .indent(1)
-            .build(),
-    );
+    let mut table = list_table();
 
     table.set_titles(Row::new(vec![
         cell![r->"#"].with_style(Attr::Dim),
@@ -221,32 +201,82 @@ fn run_list(numbers: NumberFormat, from: PathBuf) {
         cell!["I/O Control"].with_style(Attr::Dim),
     ]));
 
-    for (index, word) in words.iter().enumerate() {
-        let inst = word.inst();
-        let inst = match numbers {
-            Bin => format!("0b{:b}{:>6}", inst, inst.name()),
-            Oct => format!("0o{:o}{:>7}", inst, inst.name()),
-        };
+    let mut words = 0;
+    let mut in_comment = false;
 
-        let addr = word.addr();
-        let addr = match numbers {
-            Bin => format!("0b{:b}{:>20}", addr, addr.name()),
-            Oct => format!("0o{:o}{:>20}", addr, addr.name()),
-        };
+    for node in nodes {
+        match node {
+            Node::Word(inst, addr, ctrl) => {
+                if in_comment {
+                    table = list_table();
+                }
 
-        let ctrl = word.ctrl();
-        let ctrl = match numbers {
-            Bin => format!("0b{:b}{:>20}", ctrl, ctrl.name()),
-            Oct => format!("0o{:o}{:>20}", ctrl, ctrl.name()),
-        };
+                let inst = match numbers {
+                    Bin => format!("0b{:b}{:>6}", inst, inst.name()),
+                    Oct => format!("0o{:o}{:>7}", inst, inst.name()),
+                };
 
-        table.add_row(Row::new(vec![
-            cell![r->index].with_style(Attr::Dim),
-            cell![inst],
-            cell![addr],
-            cell![ctrl],
-        ]));
+                let addr = match numbers {
+                    Bin => format!("0b{:b}{:>20}", addr, addr.name()),
+                    Oct => format!("0o{:o}{:>20}", addr, addr.name()),
+                };
+
+                let ctrl = match numbers {
+                    Bin => format!("0b{:b}{:>20}", ctrl, ctrl.name()),
+                    Oct => format!("0o{:o}{:>20}", ctrl, ctrl.name()),
+                };
+
+                table.add_row(Row::new(vec![
+                    cell![r->words].with_style(Attr::Dim),
+                    cell![inst],
+                    cell![addr],
+                    cell![ctrl],
+                ]));
+
+                words += 1;
+                in_comment = false;
+            }
+            Node::Comment(text) => {
+                if !in_comment {
+                    in_comment = true;
+
+                    table.printstd();
+                    println!();
+                }
+
+                println!("{}", text);
+            }
+        }
     }
 
     table.printstd();
+}
+
+fn list_table() -> Table {
+    let mut table = Table::new();
+
+    table.set_format(list_table_format());
+
+    table
+}
+
+fn list_table_format() -> TableFormat {
+    FormatBuilder::new()
+        .column_separator('│')
+        .borders('│')
+        .separators(
+            &[LinePosition::Title],
+            LineSeparator::new('─', '┼', '├', '┤'),
+        )
+        .separators(
+            &[LinePosition::Top],
+            LineSeparator::new('─', '┬', '╭', '╮'),
+        )
+        .separators(
+            &[LinePosition::Bottom],
+            LineSeparator::new('─', '┴', '╰', '╯'),
+        )
+        .padding(1, 1)
+        .indent(1)
+        .build()
 }

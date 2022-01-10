@@ -8,20 +8,21 @@ pub enum SyntaxError {
     ExpectedAddr,
     ExpectedCtrl,
     ExpectedWord,
+    ExpectedComment,
     UnexpectedEoi,
 }
 
 #[allow(clippy::redundant_closure)]
-pub fn words<'a>() -> impl Parser<'a, Words, SyntaxError> {
+pub fn nodes<'a>() -> impl Parser<'a, Nodes, SyntaxError> {
     move |ctx| {
-        trim(find_until(eoi(), trim(word())))
+        trim(find_until(eoi(), trim(find_any((comment(), word())))))
             .parse(ctx)
-            .map_result(|words| Words(words))
+            .map_result(|nodes| Nodes(nodes))
     }
 }
 
 #[test]
-fn parse_words() {
+fn parse_nodes() {
     let asm = r"
     ONE 0o77 00
     STOC 0o50 00
@@ -32,70 +33,90 @@ fn parse_words() {
     NOP0 0o77 01
     ";
 
-    let expected = Words(vec![
-        Word(
+    let expected = Nodes(vec![
+        Node::Word(
             Inst::from(InstKind::One),
             Addr::from(63 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
-        Word(
+        Node::Word(
             Inst::from(InstKind::StoC),
             Addr::from(40 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
-        Word(
+        Node::Word(
             Inst::from(InstKind::StoC),
             Addr::from(41 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
-        Word(
+        Node::Word(
             Inst::from(InstKind::Sto),
             Addr::from(42 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
-        Word(
+        Node::Word(
             Inst::from(InstKind::StoC),
             Addr::from(43 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
-        Word(
+        Node::Word(
             Inst::from(InstKind::Sto),
             Addr::from(44 << ADDR_POS),
             Ctrl::from(CtrlKind::Null),
         ),
-        Word(
+        Node::Word(
             Inst::from(InstKind::Nop0),
             Addr::from(63 << ADDR_POS),
             Ctrl::from(CtrlKind::CopyShift),
         ),
     ]);
 
-    assert_eq!(expected, words().parse(asm).unwrap_result());
+    assert_eq!(expected, nodes().parse(asm).unwrap_result());
 }
 
 fn newline<'a>() -> impl Parser<'a, &'a str, SyntaxError> {
-    move |ctx| take_any((is("\n"), is("\r\n"))).parse(ctx)
+    move |ctx| take_any((eoi(), take_any((is("\n"), is("\r\n"))))).parse(ctx)
 }
 
-fn word<'a>() -> impl Parser<'a, Word, SyntaxError> {
+fn comment<'a>() -> impl Parser<'a, Node, SyntaxError> {
     move |ctx| {
-        find_all((
-            inst(),
-            space(1..),
-            addr(),
-            space(1..),
-            ctrl(),
-            take_any((newline(), eoi())),
-        ))
-        .parse(ctx)
-        .map_result(|(inst, _, addr, _, ctrl, ..)| Word(inst, addr, ctrl))
+        find_all((is(';'), take_until(newline(), is(any)), newline()))
+            .parse(ctx)
+            .map_result(|(_, text, ..)| Node::Comment(text.trim_end().into()))
+            .map_error(|err| err.with_message(ExpectedComment))
+    }
+}
+
+#[test]
+fn parse_comment() {
+    assert_eq!(
+        Node::Comment("ONE 0o77 00".into()),
+        comment().parse(";ONE 0o77 00").unwrap_result()
+    );
+    assert_eq!(
+        Node::Comment("".into()),
+        comment().parse(";   \n").unwrap_result()
+    );
+    assert_eq!(
+        Node::Comment("foo bar".into()),
+        comment().parse("; foo bar  \n").unwrap_result()
+    );
+}
+
+fn word<'a>() -> impl Parser<'a, Node, SyntaxError> {
+    move |ctx| {
+        find_all((inst(), space(1..), addr(), space(1..), ctrl(), newline()))
+            .parse(ctx)
+            .map_result(|(inst, _, addr, _, ctrl, ..)| {
+                Node::Word(inst, addr, ctrl)
+            })
     }
 }
 
 #[test]
 fn parse_word() {
     assert_eq!(
-        Word(
+        Node::Word(
             Inst::from(InstKind::One),
             Addr::from(63 << ADDR_POS),
             Ctrl::from(CtrlKind::Null)

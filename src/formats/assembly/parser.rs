@@ -24,13 +24,13 @@ pub fn nodes<'a>() -> impl Parser<'a, Nodes, SyntaxError> {
 #[test]
 fn parse_nodes() {
     let asm = r"
-    ONE 0o77 00
-    STOC 0o50 00
-    STOC 0o51 00
-    STO 0o52 00
-    STOC 0o53 00
-    STO 0o54 00
-    NOP0 0o77 01
+    ONE 0o77 0b0
+    STOC 0o50 0b0
+    STOC 0o51 0b0
+    STO 0o52 0b0
+    STOC 0o53 0b0
+    STO 0o54 0b0
+    NOP0 0o77 0b1
     ";
 
     let expected = Nodes(vec![
@@ -74,6 +74,33 @@ fn parse_nodes() {
     assert_eq!(expected, nodes().parse(asm).unwrap_result());
 }
 
+fn bin<'a>() -> impl Parser<'a, u32, SyntaxError> {
+    move |ctx| {
+        find_all((is("0b"), take(1..32, is(one_of("01")))))
+            .parse(ctx)
+            .map_result(|(_, bin)| u32::from_str_radix(bin, 2).unwrap())
+            .map_error(|err| err.with_message(ExpectedAddr))
+    }
+}
+
+fn oct<'a>() -> impl Parser<'a, u32, SyntaxError> {
+    move |ctx| {
+        find_all((is("0o"), take(1..11, is(one_of("01234567")))))
+            .parse(ctx)
+            .map_result(|(_, octal)| u32::from_str_radix(octal, 8).unwrap())
+            .map_error(|err| err.with_message(ExpectedAddr))
+    }
+}
+
+fn hex<'a>() -> impl Parser<'a, u32, SyntaxError> {
+    move |ctx| {
+        find_all((is("0h"), take(1..8, is(hex_digit))))
+            .parse(ctx)
+            .map_result(|(_, hex)| u32::from_str_radix(hex, 16).unwrap())
+            .map_error(|err| err.with_message(ExpectedAddr))
+    }
+}
+
 fn newline<'a>() -> impl Parser<'a, &'a str, SyntaxError> {
     move |ctx| take_any((eoi(), take_any((is("\n"), is("\r\n"))))).parse(ctx)
 }
@@ -98,7 +125,7 @@ fn parse_comment() {
         comment().parse(";   \n").unwrap_result()
     );
     assert_eq!(
-        Node::Comment("foo bar".into()),
+        Node::Comment(" foo bar".into()),
         comment().parse("; foo bar  \n").unwrap_result()
     );
 }
@@ -121,7 +148,7 @@ fn parse_word() {
             Addr::from(63 << ADDR_POS),
             Ctrl::from(CtrlKind::Null)
         ),
-        word().parse("ONE 0o77 00").unwrap_result()
+        word().parse("ONE 0o77 0h0").unwrap_result()
     );
 }
 
@@ -183,11 +210,9 @@ fn parse_inst() {
 
 fn addr<'a>() -> impl Parser<'a, Addr, SyntaxError> {
     move |ctx| {
-        find_all((is("0o"), take(1..2, is(one_of("01234567")))))
+        find_any((bin(), oct(), hex()))
             .parse(ctx)
-            .map_result(|(_, addr)| {
-                Addr::from(u32::from_str_radix(addr, 8).unwrap() << ADDR_POS)
-            })
+            .map_result(|addr| Addr::from(addr << ADDR_POS))
             .map_error(|err| err.with_message(ExpectedAddr))
     }
 }
@@ -196,7 +221,7 @@ fn addr<'a>() -> impl Parser<'a, Addr, SyntaxError> {
 fn parse_addr() {
     assert_eq!(
         Addr::from(63 << ADDR_POS),
-        addr().parse("0o77123").unwrap_result()
+        addr().parse("0o77").unwrap_result()
     );
     assert_eq!(
         Addr::from(0 << ADDR_POS),
@@ -209,11 +234,9 @@ fn parse_addr() {
 
 fn ctrl<'a>() -> impl Parser<'a, Ctrl, SyntaxError> {
     move |ctx| {
-        find_all((optional(is("0b")), take(1..2, is(one_of("01")))))
+        find_any((bin(), oct(), hex()))
             .parse(ctx)
-            .map_result(|(_, ctrl)| {
-                Ctrl::from(u32::from_str_radix(ctrl, 2).unwrap())
-            })
+            .map_result(Ctrl::from)
             .map_error(|err| err.with_message(ExpectedCtrl))
     }
 }
@@ -238,7 +261,7 @@ fn parse_ctrl() {
     );
     assert_eq!(
         Ctrl::from(CtrlKind::Null),
-        ctrl().parse("0").unwrap_result()
+        ctrl().parse("0h0").unwrap_result()
     );
     assert_eq!(
         Ctrl::from(CtrlKind::Null),

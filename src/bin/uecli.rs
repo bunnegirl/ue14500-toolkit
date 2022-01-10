@@ -192,7 +192,6 @@ fn run_list(numbers: NumberFormat, from: PathBuf) {
 
     let mut tables = Vec::new();
     let mut table = new_list_table();
-
     let mut words = 0;
     let mut is_comment = false;
     let mut indent = 0;

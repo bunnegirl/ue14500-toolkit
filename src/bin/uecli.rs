@@ -2,16 +2,15 @@
 #![allow(dead_code)]
 
 use clap::{ArgEnum, Parser, Subcommand};
-use prettytable::format::{
-    FormatBuilder, LinePosition, LineSeparator, TableFormat,
-};
-use prettytable::Table;
+use comfy_table::{presets::NOTHING, *};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use ue14500_toolkit::{
     data::{Node, Nodes},
     formats::{assembly, binary, FileType},
 };
+
+const TABLE_STYLE: &str = "││──├─┼┤│    ┬┴╭╮╰╯";
 
 /// Command line tools for the Usagi Electric ue14500 processor
 #[derive(Parser, Debug, PartialEq)]
@@ -178,7 +177,6 @@ fn run_dsm(_from: PathBuf, _into: PathBuf) {
 }
 
 fn run_list(numbers: NumberFormat, from: PathBuf) {
-    use prettytable::{cell, Attr, Row};
     use NumberFormat::*;
 
     let Nodes(nodes) = match FileType::try_from(from.clone())
@@ -192,23 +190,23 @@ fn run_list(numbers: NumberFormat, from: PathBuf) {
         }
     };
 
-    let mut table = list_table();
+    let mut tables = Vec::new();
+    let mut table = new_list_table();
 
-    table.set_titles(Row::new(vec![
-        cell![r->"#"].with_style(Attr::Dim),
-        cell!["Instruction"].with_style(Attr::Dim),
-        cell!["Address"].with_style(Attr::Dim),
-        cell!["I/O Control"].with_style(Attr::Dim),
-    ]));
+    table.set_header(vec!["#", "Instruction", "Address", "I/O Control"]);
 
     let mut words = 0;
-    let mut in_comment = false;
+    let mut is_comment = false;
+    let mut indent = 0;
 
     for node in nodes {
         match node {
             Node::Word(inst, addr, ctrl) => {
-                if in_comment {
-                    table = list_table();
+                if is_comment {
+                    tables.push((is_comment, indent, table));
+                    table = new_list_table();
+                    is_comment = false;
+                    indent = 0;
                 }
 
                 let inst = match numbers {
@@ -226,57 +224,77 @@ fn run_list(numbers: NumberFormat, from: PathBuf) {
                     Oct => format!("0o{:o}{:>20}", ctrl, ctrl.name()),
                 };
 
-                table.add_row(Row::new(vec![
-                    cell![r->words].with_style(Attr::Dim),
-                    cell![inst],
-                    cell![addr],
-                    cell![ctrl],
-                ]));
+                table.add_row(vec![format!("{}", words), inst, addr, ctrl]);
 
                 words += 1;
-                in_comment = false;
             }
             Node::Comment(text) => {
-                if !in_comment {
-                    in_comment = true;
-
-                    table.printstd();
-                    println!();
+                if !is_comment {
+                    tables.push((is_comment, indent, table));
+                    table = new_clean_table();
+                    is_comment = true;
+                    indent = usize::MAX;
                 }
 
-                println!("{}", text);
+                // find the minimum indentation of non empty lines
+                if !text.trim().is_empty() {
+                    let line_indent = text.len() - text.trim_start().len();
+
+                    if line_indent < indent {
+                        indent = line_indent;
+                    }
+                }
+
+                table.add_row(vec!["", &text]);
             }
         }
     }
 
-    table.printstd();
+    tables.push((is_comment, indent, table));
+
+    for (is_comment, indent, table) in tables {
+        print_table(is_comment, words, indent, table);
+    }
 }
 
-fn list_table() -> Table {
+fn new_list_table() -> Table {
     let mut table = Table::new();
 
-    table.set_format(list_table_format());
+    table.load_preset(TABLE_STYLE);
 
     table
 }
 
-fn list_table_format() -> TableFormat {
-    FormatBuilder::new()
-        .column_separator('│')
-        .borders('│')
-        .separators(
-            &[LinePosition::Title],
-            LineSeparator::new('─', '┼', '├', '┤'),
-        )
-        .separators(
-            &[LinePosition::Top],
-            LineSeparator::new('─', '┬', '╭', '╮'),
-        )
-        .separators(
-            &[LinePosition::Bottom],
-            LineSeparator::new('─', '┴', '╰', '╯'),
-        )
-        .padding(1, 1)
-        .indent(1)
-        .build()
+fn new_clean_table() -> Table {
+    let mut table = Table::new();
+
+    table.load_preset(NOTHING);
+
+    table
+}
+
+fn print_table(
+    is_comment: bool,
+    words: usize,
+    indent: usize,
+    mut table: Table,
+) {
+    let column = table.get_column_mut(0).expect("first column");
+
+    column.set_cell_alignment(CellAlignment::Right);
+    column.set_constraint(ColumnConstraint::Absolute(Width::Fixed(
+        2 + (format!("{}", words).len()) as u16,
+    )));
+
+    if is_comment && indent > 0 {
+        for line in table.lines() {
+            if line.len() > indent {
+                println!("  {}", &line[indent..]);
+            } else {
+                println!("  {}", line);
+            }
+        }
+    } else {
+        println!("{}", table);
+    }
 }

@@ -193,8 +193,6 @@ fn run_list(numbers: NumberFormat, from: PathBuf) {
     let mut tables = Vec::new();
     let mut table = new_list_table();
 
-    table.set_header(vec!["#", "Instruction", "Address", "I/O Control"]);
-
     let mut words = 0;
     let mut is_comment = false;
     let mut indent = 0;
@@ -207,6 +205,15 @@ fn run_list(numbers: NumberFormat, from: PathBuf) {
                     table = new_list_table();
                     is_comment = false;
                     indent = 0;
+                }
+
+                if words == 0 {
+                    table.set_header(vec![
+                        "#",
+                        "Instruction",
+                        "Address",
+                        "I/O Control",
+                    ]);
                 }
 
                 let inst = match numbers {
@@ -230,7 +237,10 @@ fn run_list(numbers: NumberFormat, from: PathBuf) {
             }
             Node::Comment(text) => {
                 if !is_comment {
-                    tables.push((is_comment, indent, table));
+                    if words > 0 {
+                        tables.push((is_comment, indent, table));
+                    }
+
                     table = new_clean_table();
                     is_comment = true;
                     indent = usize::MAX;
